@@ -60,7 +60,17 @@ object SharkServer extends Logging {
   var serverTransport: TServerSocket = _
 
   def main(args: Array[String]) {
-  //  val optionsProcessor = new ServerOptionsProcessor("SharkServer")
+
+
+    val cliOptions = new SharkServerCliOptions
+    cliOptions.parse(args)
+
+    // From Hive: It is critical to do this prior to initializing log4j, otherwise
+    // any log specific settings via hiveconf will be ignored.
+    val hiveconf: Properties = cliOptions.addHiveconfToSystemProperties()
+
+
+    //  val optionsProcessor = new ServerOptionsProcessor("SharkServer")
 
    // if (!optionsProcessor.process(args)) {
    //   System.exit(-1)
@@ -72,6 +82,7 @@ object SharkServer extends Logging {
     val hiveConf: HiveConf = ss.getConf
     hiveConf.getAllProperties.toSeq.sortBy(_._1).foreach { case (k, v) =>
       logDebug(s"HiveConf var: $k=$v")
+      System.out.println(s"HiveConf var: $k=$v")
     }
 
     SessionState.start(ss)
@@ -87,13 +98,6 @@ object SharkServer extends Logging {
 
 
 
-
-    val cliOptions = new SharkServerCliOptions
-    cliOptions.parse(args)
-
-    // From Hive: It is critical to do this prior to initializing log4j, otherwise
-    // any log specific settings via hiveconf will be ignored.
-    val hiveconf: Properties = cliOptions.addHiveconfToSystemProperties()
 
     //SharkEnv.fixUncompatibleConf(new HiveConf())
 

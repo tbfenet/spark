@@ -19,7 +19,7 @@ package org.apache.spark.sql.hive.thriftserver
 
 import java.io.File
 import java.net.ServerSocket
-import java.sql.{DriverManager, Statement}
+import java.sql.{ResultSet, DriverManager, Statement}
 import java.util.concurrent.TimeoutException
 
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
@@ -75,8 +75,8 @@ class SharkServer2Suite extends FunSuite with Logging {
       s"""$serverScript
          |  --master local
          |  --hiveconf hive.root.logger=INFO,console
-         |  --hiveconf ${ConfVars.METASTORECONNECTURLKEY}=$metastoreJdbcUri
-         |  --hiveconf ${ConfVars.METASTOREWAREHOUSE}=$warehousePath
+         |  --hiveconf javax.jdo.option.ConnectionURL=$metastoreJdbcUri
+         |  --hiveconf hive.metastore.warehouse.dir=$warehousePath
          |  --hiveconf ${ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST}=$listeningHost
          |  -p $listeningPort
        """.stripMargin.split("\\s+").toSeq
@@ -155,6 +155,11 @@ class SharkServer2Suite extends FunSuite with Logging {
 
       queries.foreach(statement.execute)
 
+      assertResult("test", "Table exists") {
+        val resultSet = statement.executeQuery("show tables")
+        resultSet.next()
+        resultSet.getString(1)
+      }
 
 
       assertResult(5, "Row count mismatch") {
@@ -162,6 +167,17 @@ class SharkServer2Suite extends FunSuite with Logging {
         resultSet.next()
         resultSet.getInt(1)
       }
+
+      assertResult(List(1,"blar"), "contains data") {
+        val resultSet = statement.executeQuery("SELECT key,val FROM test")
+        var out:List[(Int,String)] = Nil
+        while(resultSet.next()) {
+
+          out= ( resultSet.getInt(1),resultSet.getString(2)) ::out
+        }
+        out.reverse
+      }
+
     }
   }
 

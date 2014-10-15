@@ -18,10 +18,15 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import scala.collection.JavaConversions._
+import java.util
+
 
 import org.apache.spark.scheduler.StatsReportListener
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Logging, SparkConf, SparkContext}
+
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
 
 /** A singleton object for the master program. The slaves should not access this. */
 private[hive] object SparkSQLEnv extends Logging {
@@ -29,6 +34,7 @@ private[hive] object SparkSQLEnv extends Logging {
 
   var hiveContext: HiveContext = _
   var sparkContext: SparkContext = _
+
 
   def init() {
     if (hiveContext == null) {

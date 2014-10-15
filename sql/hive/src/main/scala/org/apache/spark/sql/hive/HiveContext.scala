@@ -423,16 +423,16 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
         val types = analyzed.output.map(_.dataType)
         // Reformat to match hive tab delimited output.
         if(hive1Compatible) {
-          result.map(_.zip(types).map(toHiveString)).map(_.mkString("\t")).toSeq
-        }else {
-
           result.map(row => hive1CompatibleFormat( row.zip(types),0) ).toSeq
-
-
+        }else {
+          result.map(_.zip(types).map(toHiveString)).map(_.mkString("\t")).toSeq
         }
     }
 
-    def hive1CompatibleFormat(rowData:Seq[(Any,DataType)],level:Int=0,separators:Array[Byte]=Array(1,2,3,4,5,6,7,8),nullString:String="\\N"):String = {
+    def hive1CompatibleFormat(rowData:Seq[(Any,DataType)],
+                              level:Int=0,
+                              separators:Array[Byte]=Array(1,2,3,4,5,6,7,8),
+                              nullString:String="\\N"):String = {
 
       val sep: String = seperator(level, separators)
       rowData.map {
@@ -442,8 +442,6 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
           hive1CompatibleFormat( seq.map(v => (v, typ)), level + 1, separators)
         case (map: Map[_, _], MapType(kType, vType, _)) =>
            hive1Map(map.toSeq,kType,vType,level,separators,nullString)
-
-
         case (null, _) => nullString
         case (s: String, StringType) =>  escapeString(s,'\\',separators)
         case (other, tpe) if primitiveTypes contains tpe => other.toString
@@ -453,14 +451,18 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
     }
 
     private def seperator(level: Int, separators: Array[Byte]): String = {
-      if (level >= separators.length)
-        throw new IllegalArgumentException("To many nested levels in result set")
-
+      if (level >= separators.length) {
+        throw new IllegalArgumentException("To many nested levels in result.")
+      }
      new String(Array(separators(level)), "UTF-8")
-
     }
 
-    def hive1Map(mapData: Seq[(Any, Any)], kType: DataType, vType: DataType, level: Int, separators: Array[Byte], nullString: String): String = {
+    private def hive1Map(mapData: Seq[(Any, Any)],
+                 kType: DataType,
+                 vType: DataType,
+                 level: Int,
+                 separators: Array[Byte],
+                 nullString: String): String = {
 
       val entrySep = seperator(level + 1, separators)
       val keyValueSep = seperator(level + 2, separators)
@@ -468,33 +470,22 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
       mapData.map {
         entry =>
           List(hive1CompatibleFormat(List((entry._1, kType)), level + 3, separators, nullString)
-            , hive1CompatibleFormat(List((entry._2, vType)), level + 3, separators, nullString)).mkString(keyValueSep)
-
+            , hive1CompatibleFormat(List((entry._2, vType)), level + 3, separators, nullString))
+            .mkString(keyValueSep)
       }.mkString(entrySep)
-
-
     }
 
-      def escapeString(str: String, escapeChar: Char, escapeChars: Array[Byte]) = {
-
-
-        val escaped = str.getBytes("UTF-8").toSeq.flatMap {
+     private  def escapeString(str: String, escapeChar: Char, escapeChars: Array[Byte]) = {
+       val escaped = str.getBytes("UTF-8").toSeq.flatMap {
           c: Byte =>
             if (escapeChars.contains(c)) {
               Array(escapeChar.toByte, c)
             } else {
               Array(c)
-
             }
-
-        }
-
-        new String(escaped.toArray, "UTF-8")
-
-
-      }
-
-
+       }
+       new String(escaped.toArray, "UTF-8")
+    }
 
     override def simpleString: String =
       logical match {

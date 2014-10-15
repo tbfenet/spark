@@ -168,7 +168,7 @@ class SharkServer2Suite extends FunSuite with Logging {
         resultSet.getInt(1)
       }
 
-      assertResult(List(1,"blar"), "contains data") {
+      assertResult(List((238,"val_238"), (86,"val_86"), (311,"val_311"), (27,"val_27"), (165,"val_165")), "contains data") {
         val resultSet = statement.executeQuery("SELECT key,val FROM test")
         var out:List[(Int,String)] = Nil
         while(resultSet.next()) {

@@ -278,7 +278,7 @@ class SharkServerHandler extends HiveServerHandler with Logging {
 //  SharkConfVars.initializeWithDefaults(conf)
 
   private val driver = {
-    val d = new SparkSQLDriver()
+    val d = new SparkSQLDriver1()
     d.init()
     d
   }

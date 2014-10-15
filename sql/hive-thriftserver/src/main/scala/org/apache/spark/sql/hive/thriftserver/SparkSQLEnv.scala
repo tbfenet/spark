@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive.thriftserver
 
+import java.util
+
 import org.apache.hadoop.hive.ql.session.SessionState
 
 import org.apache.spark.scheduler.{SplitInfo, StatsReportListener}
@@ -24,12 +26,16 @@ import org.apache.spark.Logging
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.collection.immutable.HashMap
+import scala.collection.mutable
+
 /** A singleton object for the master program. The slaves should not access this. */
 private[hive] object SparkSQLEnv extends Logging {
   logDebug("Initializing SparkSQLEnv")
 
   var hiveContext: HiveContext = _
   var sparkContext: SparkContext = _
+
 
   def init() {
     if (hiveContext == null) {

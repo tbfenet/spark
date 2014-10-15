@@ -17,28 +17,27 @@
 
 package org.apache.spark.sql.hive.thriftserver
 
+import java.io.File
+import java.net.ServerSocket
+import java.sql.{ResultSet, DriverManager, Statement}
+import java.util.concurrent.TimeoutException
+
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars
+import org.apache.hadoop.hive.jdbc.HiveDriver
+import org.apache.spark.Logging
+import org.apache.spark.sql.catalyst.util.getTempFilePath
+import org.scalatest.FunSuite
+
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
 import scala.sys.process.{Process, ProcessLogger}
 
-import java.io.File
-import java.net.ServerSocket
-import java.sql.{DriverManager, Statement}
-import java.util.concurrent.TimeoutException
-
-import org.apache.hadoop.hive.conf.HiveConf.ConfVars
-import org.apache.hive.jdbc.HiveDriver
-import org.scalatest.FunSuite
-
-import org.apache.spark.Logging
-import org.apache.spark.sql.catalyst.util.getTempFilePath
-
 /**
  * Tests for the HiveThriftServer2 using JDBC.
  */
-class HiveThriftServer2Suite extends FunSuite with Logging {
+class SharkServer2Suite extends FunSuite with Logging {
   Class.forName(classOf[HiveDriver].getCanonicalName)
 
   private val listeningHost = "localhost"
@@ -55,25 +54,40 @@ class HiveThriftServer2Suite extends FunSuite with Logging {
   private val metastorePath = getTempFilePath("metastore")
   private val metastoreJdbcUri = s"jdbc:derby:;databaseName=$metastorePath;create=true"
 
-  def startThriftServerWithin(timeout: FiniteDuration = 30.seconds)(f: Statement => Unit) {
-    val serverScript = "../../sbin/start-thriftserver.sh".split("/").mkString(File.separator)
+  def startThriftServerWithin(timeout: FiniteDuration = 60.seconds)(f: Statement => Unit) {
+    val serverScript = "../../sbin/start-sharkserver.sh".split("/").mkString(File.separator)
+
+/*
+
+    val defaultArgs = Seq("./bin/shark", "--service", "sharkserver",
+      "--verbose",
+      "-p",
+      PORT,
+      "--hiveconf",
+      "hive.root.logger=INFO,console",
+      "--hiveconf",
+      "\"javax.jdo.option.ConnectionURL=jdbc:derby:;databaseName=" + METASTORE_PATH + ";create=true\"",
+      "--hiveconf",
+      "\"hive.metastore.warehouse.dir=" + WAREHOUSE_PATH + "\"")
+*/
 
     val command =
       s"""$serverScript
          |  --master local
          |  --hiveconf hive.root.logger=INFO,console
-         |  --hiveconf ${ConfVars.METASTORECONNECTURLKEY}=$metastoreJdbcUri
-         |  --hiveconf ${ConfVars.METASTOREWAREHOUSE}=$warehousePath
+         |  --hiveconf javax.jdo.option.ConnectionURL=$metastoreJdbcUri
+         |  --hiveconf hive.metastore.warehouse.dir=$warehousePath
          |  --hiveconf ${ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST}=$listeningHost
-         |  --hiveconf ${ConfVars.HIVE_SERVER2_THRIFT_PORT}=$listeningPort
+         |  -p $listeningPort
        """.stripMargin.split("\\s+").toSeq
 
     val serverStarted = Promise[Unit]()
     val buffer = new ArrayBuffer[String]()
 
     def captureOutput(source: String)(line: String) {
+      System.err.println(line)
       buffer += s"$source> $line"
-      if (line.contains("ThriftBinaryCLIService listening on")) {
+      if (line.contains("Starting Shark server")) {
         serverStarted.success(())
       }
     }
@@ -86,7 +100,7 @@ class HiveThriftServer2Suite extends FunSuite with Logging {
       logInfo(s"Spark SQL Thrift server process exit value: $exitValue")
     }
 
-    val jdbcUri = s"jdbc:hive2://$listeningHost:$listeningPort/"
+    val jdbcUri = s"jdbc:hive://$listeningHost:$listeningPort/"
     val user = System.getProperty("user.name")
 
     try {
@@ -137,16 +151,33 @@ class HiveThriftServer2Suite extends FunSuite with Logging {
 
       val queries = Seq(
         "CREATE TABLE test(key INT, val STRING)",
-        s"LOAD DATA LOCAL INPATH '$dataFilePath' OVERWRITE INTO TABLE test",
-        "CACHE TABLE test")
+        s"LOAD DATA LOCAL INPATH '$dataFilePath' OVERWRITE INTO TABLE test")
 
       queries.foreach(statement.execute)
+
+      assertResult("test", "Table exists") {
+        val resultSet = statement.executeQuery("show tables")
+        resultSet.next()
+        resultSet.getString(1)
+      }
+
 
       assertResult(5, "Row count mismatch") {
         val resultSet = statement.executeQuery("SELECT COUNT(*) FROM test")
         resultSet.next()
         resultSet.getInt(1)
       }
+
+      assertResult(List((238,"val_238"), (86,"val_86"), (311,"val_311"), (27,"val_27"), (165,"val_165")), "contains data") {
+        val resultSet = statement.executeQuery("SELECT key,val FROM test")
+        var out:List[(Int,String)] = Nil
+        while(resultSet.next()) {
+
+          out= ( resultSet.getInt(1),resultSet.getString(2)) ::out
+        }
+        out.reverse
+      }
+
     }
   }
 

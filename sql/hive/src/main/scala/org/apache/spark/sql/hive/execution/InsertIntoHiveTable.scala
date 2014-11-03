@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive.execution
 
+import java.util
+
 import scala.collection.JavaConversions._
 
 import java.util.{HashMap => JHashMap}
@@ -224,6 +226,14 @@ case class InsertIntoHiveTable(
         case (key, Some(value)) => key -> value
         case (key, None) => key -> "" // Should not reach here right now.
       }
+
+      val orderedPartitionSpec = new util.LinkedHashMap[String,String]()
+      table.hiveQlTable.getPartCols().foreach{
+        entry=>
+
+          orderedPartitionSpec.put(entry.getName,partitionSpec.get(entry.getName).getOrElse(""))
+      }
+
       val partVals = MetaStoreUtils.getPvals(table.hiveQlTable.getPartCols, partitionSpec)
       db.validatePartitionNameCharacters(partVals)
       // inheritTableSpecs is set to true. It should be set to false for a IMPORT query
@@ -234,7 +244,7 @@ case class InsertIntoHiveTable(
       db.loadPartition(
         outputPath,
         qualifiedTableName,
-        partitionSpec,
+        orderedPartitionSpec,
         overwrite,
         holdDDLTime,
         inheritTableSpecs,

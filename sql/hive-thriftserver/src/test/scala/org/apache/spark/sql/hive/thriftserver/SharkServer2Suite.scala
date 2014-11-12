@@ -77,7 +77,7 @@ class SharkServer2Suite extends FunSuite with Logging {
          |  --hiveconf hive.root.logger=INFO,console
          |  --hiveconf javax.jdo.option.ConnectionURL=$metastoreJdbcUri
          |  --hiveconf hive.metastore.warehouse.dir=$warehousePath
-         |  --hiveconf ${ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST}=$listeningHost
+         |  --hiveconf hive.server2.thrift.bind.host=$listeningHost
          |  -p $listeningPort
        """.stripMargin.split("\\s+").toSeq
 
@@ -147,12 +147,22 @@ class SharkServer2Suite extends FunSuite with Logging {
   test("Test JDBC query execution") {
     startThriftServerWithin() { statement =>
       val dataFilePath =
-        Thread.currentThread().getContextClassLoader.getResource("data/files/small_kv.txt")
+        Thread.currentThread().getContextClassLoader.getResource("data/files/small_kv.csv")
 
       val queries = Seq(
-        "CREATE TABLE test(key INT, val STRING)",
-        s"LOAD DATA LOCAL INPATH '$dataFilePath' OVERWRITE INTO TABLE test")
+      s"""
+         |create external table test (key int, val array<float>,val2 map<string,double>)
+         |ROW FORMAT  DELIMITED
+         |FIELDS TERMINATED BY ','
+         |COLLECTION ITEMS TERMINATED BY ';'
+         |MAP KEYS TERMINATED BY ':'
+         |LOCATION '$dataFilePath'
+       """.stripMargin
 
+        )
+        /*"CREATE TABLE test(key INT, val STRING)",
+        s"LOAD DATA LOCAL INPATH '$dataFilePath' OVERWRITE INTO TABLE test"
+        * */
       queries.foreach(statement.execute)
 
       assertResult("test", "Table exists") {
@@ -169,18 +179,18 @@ class SharkServer2Suite extends FunSuite with Logging {
       }
 
       assertResult(List((238,"val_238"), (86,"val_86"), (311,"val_311"), (27,"val_27"), (165,"val_165")), "contains data") {
-        val resultSet = statement.executeQuery("SELECT key,val FROM test")
-        var out:List[(Int,String)] = Nil
+        val resultSet = statement.executeQuery("SELECT key,val,val2 FROM test")
+        var out:List[(Int,Any,Any)] = Nil
         while(resultSet.next()) {
 
-          out= ( resultSet.getInt(1),resultSet.getString(2)) ::out
+          out= ( resultSet.getInt(1),resultSet.getObject(2),resultSet.getObject(3)) ::out
         }
         out.reverse
       }
 
     }
   }
-
+/*
   test("SPARK-3004 regression: result set containing NULL") {
     startThriftServerWithin() { statement =>
       val dataFilePath =
@@ -204,5 +214,5 @@ class SharkServer2Suite extends FunSuite with Logging {
 
       assert(!resultSet.next())
     }
-  }
+  }  */
 }

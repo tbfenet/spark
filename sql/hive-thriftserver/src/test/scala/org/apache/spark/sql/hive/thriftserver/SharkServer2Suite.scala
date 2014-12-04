@@ -41,14 +41,15 @@ class SharkServer2Suite extends FunSuite with Logging {
   Class.forName(classOf[HiveDriver].getCanonicalName)
 
   private val listeningHost = "localhost"
-  private val listeningPort =  {
+  private val listeningPort = 10000
+/*  private val listeningPort =  {
     // Let the system to choose a random available port to avoid collision with other parallel
     // builds.
     val socket = new ServerSocket(0)
     val port = socket.getLocalPort
     socket.close()
     port
-  }
+  }*/
 
   private val warehousePath = getTempFilePath("warehouse")
   private val metastorePath = getTempFilePath("metastore")
@@ -92,6 +93,7 @@ class SharkServer2Suite extends FunSuite with Logging {
       }
     }
 
+/*
     val process = Process(command).run(
       ProcessLogger(captureOutput("stdout"), captureOutput("stderr")))
 
@@ -99,12 +101,13 @@ class SharkServer2Suite extends FunSuite with Logging {
       val exitValue = process.exitValue()
       logInfo(s"Spark SQL Thrift server process exit value: $exitValue")
     }
+*/
 
     val jdbcUri = s"jdbc:hive://$listeningHost:$listeningPort/"
     val user = System.getProperty("user.name")
 
     try {
-      Await.result(serverStarted.future, timeout)
+    //  Await.result(serverStarted.future, timeout)
 
       val connection = DriverManager.getConnection(jdbcUri, user, "")
       val statement = connection.createStatement()
@@ -140,23 +143,25 @@ class SharkServer2Suite extends FunSuite with Logging {
     } finally {
       warehousePath.delete()
       metastorePath.delete()
-      process.destroy()
+//      process.destroy()
     }
   }
 
   test("Test JDBC query execution") {
     startThriftServerWithin() { statement =>
       val dataFilePath =
-        Thread.currentThread().getContextClassLoader.getResource("data/files/small_kv.csv")
+        Thread.currentThread().getContextClassLoader.getResource("data/files/")
 
       val queries = Seq(
+      "drop table if exists test",
       s"""
-         |create external table test (key int, val array<float>,val2 map<string,double>)
-         |ROW FORMAT  DELIMITED
-         |FIELDS TERMINATED BY ','
-         |COLLECTION ITEMS TERMINATED BY ';'
-         |MAP KEYS TERMINATED BY ':'
-         |LOCATION '$dataFilePath'
+         create external table test (key int, val array<float>,val2 map<string,double>)
+         ROW FORMAT  DELIMITED
+         FIELDS TERMINATED BY ','
+         COLLECTION ITEMS TERMINATED BY ';'
+         MAP KEYS TERMINATED BY ':'
+         STORED AS TEXTFILE
+         LOCATION '$dataFilePath'
        """.stripMargin
 
         )
@@ -170,7 +175,16 @@ class SharkServer2Suite extends FunSuite with Logging {
         resultSet.next()
         resultSet.getString(1)
       }
+    def kkk {
+      val resultSet = statement.executeQuery("SELECT * FROM test")
+      var out: List[(Int, Any, Any)] = Nil
+      while (resultSet.next()) {
+        out = (resultSet.getInt(1), resultSet.getObject(2), resultSet.getObject(3)) :: out
+      }
+      println(out)
+    }
 
+      kkk
 
       assertResult(5, "Row count mismatch") {
         val resultSet = statement.executeQuery("SELECT COUNT(*) FROM test")

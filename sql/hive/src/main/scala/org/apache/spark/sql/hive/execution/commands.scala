@@ -98,3 +98,22 @@ case class AddFile(path: String) extends LeafNode with Command {
   }
 }
 
+/**
+ * :: DeveloperApi ::
+ */
+@DeveloperApi
+case class AddJar(path: String) extends LeafNode with Command {
+  def hiveContext = sqlContext.asInstanceOf[HiveContext]
+
+  override def output = Seq.empty
+
+  override protected[sql] lazy val sideEffectResult: Seq[Row] = {
+    hiveContext.runSqlHive(s"ADD JAR $path")
+    hiveContext.sparkContext.addJar(path)
+    Seq.empty[Row]
+  }
+  override def execute(): RDD[Row] = {
+    sideEffectResult
+    sparkContext.emptyRDD[Row]
+  }
+}

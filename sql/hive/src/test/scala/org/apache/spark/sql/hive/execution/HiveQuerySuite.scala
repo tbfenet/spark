@@ -23,6 +23,7 @@ import org.apache.spark.SparkFiles
 
 import scala.util.Try
 
+import org.apache.spark.SparkException
 import org.apache.spark.sql.hive._
 import org.apache.spark.sql.hive.test.TestHive
 import org.apache.spark.sql.hive.test.TestHive._
@@ -496,6 +497,23 @@ class HiveQuerySuite extends HiveComparisonTest {
         assert(map.size === 1)
         assert(map.head === (key, value))
     }
+  }
+
+  test("ADD JAR command") {
+    val testJar = TestHive.getHiveFile("data/files/TestSerDe.jar").getCanonicalPath
+    sql("CREATE TABLE alter1(a INT, b INT)")
+    intercept[Exception] {
+      sql(
+        """ALTER TABLE alter1 SET SERDE 'org.apache.hadoop.hive.serde2.TestSerDe'
+          |WITH serdeproperties('s1'='9')
+        """.stripMargin)
+    }
+    sql(s"ADD JAR $testJar")
+    sql(
+      """ALTER TABLE alter1 SET SERDE 'org.apache.hadoop.hive.serde2.TestSerDe'
+        |WITH serdeproperties('s1'='9')
+      """.stripMargin)
+    sql("DROP TABLE alter1")
   }
 
   test("parse HQL set commands") {

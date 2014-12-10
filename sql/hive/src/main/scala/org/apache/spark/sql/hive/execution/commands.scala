@@ -19,6 +19,7 @@ package org.apache.spark.sql.hive.execution
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.Row
 import org.apache.spark.sql.execution.{Command, LeafNode}
 import org.apache.spark.sql.hive.HiveContext
@@ -72,3 +73,28 @@ case class DropTable(tableName: String, ifExists: Boolean) extends LeafNode with
     sparkContext.emptyRDD[Row]
   }
 }
+
+
+
+
+
+/**
+ * :: DeveloperApi ::
+ */
+@DeveloperApi
+case class AddFile(path: String) extends LeafNode with Command {
+  def hiveContext = sqlContext.asInstanceOf[HiveContext]
+
+  override def output = Seq.empty
+
+  override protected[sql] lazy val sideEffectResult: Seq[Row] = {
+    hiveContext.runSqlHive(s"ADD FILE $path")
+    hiveContext.sparkContext.addFile(path)
+    Seq.empty[Row]
+  }
+  override def execute(): RDD[Row] = {
+    sideEffectResult
+    sparkContext.emptyRDD[Row]
+  }
+}
+

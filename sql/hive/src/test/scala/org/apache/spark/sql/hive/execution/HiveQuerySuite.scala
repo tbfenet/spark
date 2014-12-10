@@ -17,6 +17,10 @@
 
 package org.apache.spark.sql.hive.execution
 
+import java.io.File
+
+import org.apache.spark.SparkFiles
+
 import scala.util.Try
 
 import org.apache.spark.sql.hive._
@@ -559,6 +563,19 @@ class HiveQuerySuite extends HiveComparisonTest {
 
     clear()
   }
+
+
+  test("ADD FILE command") {
+        val testFile = TestHive.getHiveFile("data/files/v1.txt").getCanonicalFile
+        sql(s"ADD FILE $testFile")
+
+          val checkAddFileRDD = sparkContext.parallelize(1 to 2, 1).mapPartitions { _ =>
+            Iterator.single(new File(SparkFiles.get("v1.txt")).canRead)
+          }
+
+          assert(checkAddFileRDD.first())
+  }
+
 
   createQueryTest("select from thrift based table",
     "SELECT * from src_thrift")

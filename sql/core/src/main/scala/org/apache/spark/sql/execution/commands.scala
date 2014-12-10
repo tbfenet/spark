@@ -167,3 +167,5 @@ case class DescribeCommand(child: SparkPlan, output: Seq[Attribute])(
     context.sparkContext.parallelize(rows, 1)
   }
 }
+
+

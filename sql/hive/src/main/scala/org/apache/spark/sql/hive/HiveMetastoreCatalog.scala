@@ -40,6 +40,7 @@ import org.apache.spark.sql.sources.{CreateTableUsingAsSelect, LogicalRelation, 
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, SQLContext, SaveMode, sources}
 
+
 /* Implicit conversions */
 import scala.collection.JavaConversions._
 
@@ -300,7 +301,7 @@ private[hive] class HiveMetastoreCatalog(val client: ClientInterface, hive: Hive
     val result = if (metastoreRelation.hiveQlTable.isPartitioned) {
       val partitionSchema = StructType.fromAttributes(metastoreRelation.partitionKeys)
       val partitionColumnDataTypes = partitionSchema.map(_.dataType)
-      val partitions = metastoreRelation.hiveQlPartitions.map { p =>
+      val partitions = metastoreRelation.hiveQlPartitions( List(Map.empty)  ).map { p =>
         val location = p.getLocation
         val values = InternalRow.fromSeq(p.getValues.zip(partitionColumnDataTypes).map {
           case (rawValue, dataType) => Cast(Literal(rawValue), dataType).eval(null)
@@ -643,7 +644,10 @@ private[hive] case class MetastoreRelation
     new Table(tTable)
   }
 
-  @transient val hiveQlPartitions: Seq[Partition] = table.getAllPartitions.map { p =>
+  def  hiveQlPartitions(filters:Seq[Map[String,String]]): Seq[Partition] = filters
+    .flatMap(table.getPartitions)
+    .distinct
+    .map { p =>
     val tPartition = new org.apache.hadoop.hive.metastore.api.Partition
     tPartition.setDbName(databaseName)
     tPartition.setTableName(tableName)

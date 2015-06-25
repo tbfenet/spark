@@ -19,7 +19,7 @@ package org.apache.spark.sql.hive.client
 
 import java.io.PrintStream
 import java.util.{Map => JMap}
-
+import scala.collection.JavaConversions._
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
 
 private[hive] case class HiveDatabase(
@@ -70,6 +70,10 @@ private[hive] case class HiveTable(
   def database: String = specifiedDatabase.getOrElse(sys.error("database not resolved"))
 
   def isPartitioned: Boolean = partitionColumns.nonEmpty
+
+  def getPartitions(filter: Map[String, String]): Seq[HivePartition] = client
+    .getPartitions(this, filter)
+
 
   def getAllPartitions: Seq[HivePartition] = client.getAllPartitions(this)
 
@@ -128,6 +132,10 @@ private[hive] trait ClientInterface {
   def getPartitionOption(
       hTable: HiveTable,
       partitionSpec: JMap[String, String]): Option[HivePartition]
+
+  /** Returns partitions for the given table with filter. */
+  def getPartitions(hTable: HiveTable, filter:JMap[String,String]): Seq[HivePartition]
+
 
   /** Returns all partitions for the given table. */
   def getAllPartitions(hTable: HiveTable): Seq[HivePartition]

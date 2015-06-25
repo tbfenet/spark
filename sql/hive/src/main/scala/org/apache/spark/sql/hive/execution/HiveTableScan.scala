@@ -30,7 +30,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.hive._
-import org.apache.spark.sql.types.{BooleanType, DataType}
+import org.apache.spark.sql.types._
 
 /**
  * The Hive table scan operator.  Column and partition pruning are both handled.
@@ -46,6 +46,8 @@ case class HiveTableScan(
     partitionPruningPred: Option[Expression])(
     @transient val context: HiveContext)
   extends LeafNode {
+
+  val  hiveFilterMaker = HiveMetastoreFilterMaker(relation)
 
   require(partitionPruningPred.isEmpty || relation.hiveQlTable.isPartitioned,
     "Partition pruning predicates only supported for partitioned tables.")
@@ -63,6 +65,12 @@ case class HiveTableScan(
     BindReferences.bindReference(pred, relation.partitionKeys)
   }
 
+
+  private[this] val metastorePartitionSpec: List[Map[String, String]] = partitionPruningPred
+    .map(hiveFilterMaker.mkMetaPartitionsSpec)
+    .getOrElse(List(Map.empty[String, String]))
+
+
   // Create a local copy of hiveconf,so that scan specific modifications should not impact
   // other queries
   @transient
@@ -74,6 +82,8 @@ case class HiveTableScan(
   @transient
   private[this] val hadoopReader =
     new HadoopTableReader(attributes, relation, context, hiveExtraConf)
+
+
 
   private[this] def castFromString(value: String, dataType: DataType) = {
     Cast(Literal(value), dataType).eval(null)
@@ -112,20 +122,24 @@ case class HiveTableScan(
    * @param partitions All partitions of the relation.
    * @return Partitions that are involved in the query plan.
    */
-  private[hive] def prunePartitions(partitions: Seq[HivePartition]) = {
+  private[hive]
+  def prunePartitions(partitions: (Seq[Map[String, String]]) => Seq[HivePartition])
+  : Seq[HivePartition] = {
     boundPruningPred match {
-      case None => partitions
-      case Some(shouldKeep) => partitions.filter { part =>
-        val dataTypes = relation.partitionKeys.map(_.dataType)
-        val castedValues = for ((value, dataType) <- part.getValues.zip(dataTypes)) yield {
-          castFromString(value, dataType)
-        }
+      case None => partitions(List(Map.empty))
+      case Some(shouldKeep) =>
 
-        // Only partitioned values are needed here, since the predicate has already been bound to
-        // partition key attribute references.
-        val row = new GenericRow(castedValues.toArray)
-        shouldKeep.eval(row).asInstanceOf[Boolean]
-      }
+        partitions(metastorePartitionSpec).filter { part =>
+          val dataTypes = relation.partitionKeys.map(_.dataType)
+          val castedValues = for ((value, dataType) <- part.getValues.zip(dataTypes)) yield {
+            castFromString(value, dataType)
+          }
+
+          // Only partitioned values are needed here, since the predicate has already been bound to
+          // partition key attribute references.
+          val row = new GenericRow(castedValues.toArray)
+          shouldKeep.eval(row).asInstanceOf[Boolean]
+        }
     }
   }
 
@@ -137,3 +151,6 @@ case class HiveTableScan(
 
   override def output: Seq[Attribute] = attributes
 }
+
+
+

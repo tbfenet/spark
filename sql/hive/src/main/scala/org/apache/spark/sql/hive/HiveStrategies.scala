@@ -87,6 +87,7 @@ private[hive] trait HiveStrategies {
              hiveContext.convertMetastoreParquet &&
              !hiveContext.conf.parquetUseDataSourceApi =>
 
+
         // Filter out all predicates that only deal with partition keys
         val partitionsKeys = AttributeSet(relation.partitionKeys)
         val (pruningPredicates, otherPredicates) = predicates.partition {
@@ -115,6 +116,8 @@ private[hive] trait HiveStrategies {
                 val key = relation.partitionKeys(idx)
                 Cast(BoundReference(idx, StringType, nullable = true), key.dataType)
             }
+            val metastoreFilter = HiveMetastoreFilterMaker(relation = relation)
+              .mkMetaPartitionsSpec(rawPredicate)
 
             val inputData = new GenericMutableRow(relation.partitionKeys.size)
             val pruningCondition =
@@ -124,7 +127,8 @@ private[hive] trait HiveStrategies {
                 InterpretedPredicate.create(castedPredicate)
               }
 
-            val partitions = relation.hiveQlPartitions.filter { part =>
+
+            val partitions = relation.hiveQlPartitions(metastoreFilter).filter { part =>
               val partitionValues = part.getValues
               var i = 0
               while (i < partitionValues.size()) {

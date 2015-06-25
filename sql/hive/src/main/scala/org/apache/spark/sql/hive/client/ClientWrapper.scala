@@ -331,6 +331,15 @@ private[hive] class ClientWrapper(
     Option(qlPartition).map(toHivePartition)
   }
 
+  override def getPartitions(hTable: HiveTable,
+                             partitionFilter: JMap[String, String]): Seq[HivePartition]
+  = withHiveState {
+    val qlTable = toQlTable(hTable)
+    val qlPartitions = client.getPartitionsByNames(qlTable, partitionFilter)
+
+    qlPartitions.toSeq.map(toHivePartition)
+  }
+
   override def getAllPartitions(hTable: HiveTable): Seq[HivePartition] = withHiveState {
     val qlTable = toQlTable(hTable)
     shim.getAllPartitions(client, qlTable).map(toHivePartition)
